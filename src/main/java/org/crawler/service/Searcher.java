@@ -1,7 +1,9 @@
-package org.crawler;
+package org.crawler.service;
+
+import org.crawler.model.SearchResult;
 
 public interface Searcher {
 
-    SearchResponse search(String startPage, String targetPage);
+    SearchResult search(String startPage, String targetPage) throws Exception;
 
 }

@@ -1,5 +1,8 @@
-package org.crawler;
+package org.crawler.service;
 
+import org.crawler.exception.PageNotFoundException;
+import org.crawler.model.SearchResult;
+import org.crawler.model.PageData;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -7,106 +10,81 @@ import org.jsoup.select.Elements;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class CrawlerService implements Searcher {
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-
     @Override
-    public SearchResponse search(String startPage, String targetPage) {
+    public SearchResult search(String startPage, String targetPage) throws Exception {
         long startTime = System.nanoTime();
-
-        List<String> path = null;
-        try {
-            path = searchPage(startPage, targetPage, 6);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
+        List<String> path = searchPage(startPage, targetPage);
         long stopTime = System.nanoTime();
-
         double seconds = (double) (stopTime - startTime) / 1_000_000_000;
-
-        SearchResponse result = new SearchResponse(startPage, path, seconds);
-
-        return result;
+        return new SearchResult(startPage, path, seconds);
     }
 
-    private List<String> searchPage(String startPage, String targetPage, int maxHops) throws Exception {
-
+    private List<String> searchPage(String startPage, String targetPage) throws Exception {
         if (startPage.equals(targetPage)) {
             return List.of(startPage);
         }
 
         Set<String> visited = Collections.synchronizedSet(new HashSet<>());
+        Queue<CompletableFuture<PageData>> queue = new LinkedList<>();
 
-        Queue<CompletableFuture<SearchResult>> queue = new LinkedList<>();
+        try (ExecutorService service = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())) {
+            CompletableFuture<PageData> firstPage = fetchPage(startPage, List.of(startPage), service);
+            queue.add(firstPage);
 
-        CompletableFuture<SearchResult> futureToQueue = fetchPage(startPage, List.of(startPage));
-        queue.add(futureToQueue);
+            while (!queue.isEmpty()) {
+                CompletableFuture<PageData> future = queue.poll();
+                PageData result = future.get();
 
-        while (!queue.isEmpty()) {
+                visited.add(result.url());
 
-            CompletableFuture<SearchResult> future = queue.poll();
+                for (String linkedUrl : result.linkedUrls()) {
+                    if (visited.contains(linkedUrl)) continue;
 
-            SearchResult result = future.get();
+                    List<String> newPath = new ArrayList<>(result.path());
+                    newPath.add(linkedUrl);
 
-            if (result.path().size() > maxHops) throw new RuntimeException("Too many paths (Out of hops)");
-
-            visited.add(result.url());
-
-            for (String linkedUrl : result.linkedUrls()) {
-                List<String> newPath = new ArrayList<>(result.path());
-                newPath.add(linkedUrl);
-                if (linkedUrl.equals(targetPage)) {
-                    queue.forEach(it -> it.cancel(true));
-                    return newPath;
+                    if (linkedUrl.equals(targetPage)) {
+                        service.shutdownNow();
+                        return newPath;
+                    }
+                    queue.add(fetchPage(linkedUrl, newPath, service));
                 }
-                queue.add(fetchPage(linkedUrl, newPath));
             }
         }
         return null;
     }
 
-    private CompletableFuture<SearchResult> fetchPage(String url, List<String> currentPath) {
+    private CompletableFuture<PageData> fetchPage(String url, List<String> currentPath, Executor executor) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                System.out.println("Working");
-
+                System.out.println("Fetching page " + url);
                 Connection.Response site = Jsoup.connect(url).execute();
-
-                Document doc = site.parse();
                 if (site.statusCode() == 404) {
-                    throw new RuntimeException("PageNotFoundException");
+                    throw new PageNotFoundException();
                 }
+                Document doc = site.parse();
                 Elements links = doc.select("#bodyContent .mw-content-ltr.mw-parser-output a[href^=/wiki/]");
                 List<String> linkedUrls = links.stream()
                         .map(it -> it.absUrl("href"))
-                        .filter(it -> !it.contains("#"))
-                        .filter(it -> !it.contains("Contents:"))
-                        .filter(it -> !it.contains("Special:"))
-                        .filter(it -> !it.contains("File:"))
-                        .filter(it -> !it.contains("Portal:"))
-                        .filter(it -> !it.contains("Help"))
-                        .filter(it -> !it.contains("Wikipedia:"))
-                        .filter(it -> !it.contains("Category:"))
-                        .filter(it -> !it.contains("Template:"))
-                        .filter(it -> !it.contains("Template_talk:"))
-                        .filter(it -> !it.contains("Talk:"))
-                        .filter(it -> !it.contains("User:"))
-                        .filter(it -> !it.contains("User_talk:"))
-                        .filter(it -> !it.contains("Main_Page"))
-                        .filter(it -> !it.contains("Wikipedia_talk"))
+                        .filter(this::isValidUrl)
                         .toList();
-                return new SearchResult(url, currentPath, linkedUrls);
+                return new PageData(url, currentPath, linkedUrls);
             } catch (IOException e) {
-                throw new RuntimeException(e + " PageNotFoundException");
+                throw new PageNotFoundException(e);
             }
         }, executor);
     }
 
+    private boolean isValidUrl(String url) {
+        List<String> invalidPatterns = List.of(
+                "#", "Contents:", "Special:", "File:", "Portal:", "Help",
+                "Wikipedia:", "Category:", "Template:", "Template_talk:",
+                "Talk:", "User:", "User_talk:", "Main_Page", "Wikipedia_talk"
+        );
+        return invalidPatterns.stream().noneMatch(url::contains);
+    }
 }
