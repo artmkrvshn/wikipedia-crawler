@@ -44,6 +44,9 @@ public class Main {
                 if (url == null || url.isEmpty()) {
                     continue;
                 }
+                if (url.equals("exit")) {
+                    System.exit(0);
+                }
                 if (!url.startsWith("https://en.wikipedia.org/wiki/")) {
                     url = "https://en.wikipedia.org/wiki/" + url;
                 }
