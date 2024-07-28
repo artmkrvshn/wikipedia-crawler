@@ -1,6 +1,7 @@
 plugins {
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.google.cloud.tools.jib' version '3.3.2'
 }
 
 group = 'org.crawler'
@@ -24,4 +25,9 @@ jar {
     manifest {
         attributes 'Main-Class': 'org.crawler.Main'
     }
+}
+
+jib {
+    from.image = "eclipse-temurin:21-jre"
+    container.creationTime = "USE_CURRENT_TIMESTAMP"
 }
