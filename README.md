@@ -37,6 +37,12 @@ docker run --name wikipedia-crawler -it --rm wikipedia-crawler:1.0-SNAPSHOT
 
 Once the application is running, enter the start page and target page URLs when prompted.
 
+## Screenshot
+
+![img.png](images/img.png)
+
+More screenshots in images folder
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
