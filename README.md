@@ -19,8 +19,8 @@ To run the application, follow these steps:
 
 Ensure you have Java 21 installed on your system.
 ```
-git clone https://github.com/artmkrvshn/wikipedia-crawler.git
-cd wikipedia-crawler
+git clone https://github.com/artmkrvshn/wikipedia-recursive-crawler.git
+cd wikipedia-recursive-crawler
 ./gradlew shadowJar
 java -jar build/libs/wikipedia-crawler-1.0-SNAPSHOT-all.jar
 ```
@@ -29,8 +29,8 @@ java -jar build/libs/wikipedia-crawler-1.0-SNAPSHOT-all.jar
 
 Ensure you have Docker Engine running.
 ```
-git clone https://github.com/artmkrvshn/wikipedia-crawler.git
-cd wikipedia-crawler
+git clone https://github.com/artmkrvshn/wikipedia-recursive-crawler.git
+cd wikipedia-recursive-crawler
 ./gradlew jibDockerBuild
 docker run --name wikipedia-crawler -it --rm wikipedia-crawler:1.0-SNAPSHOT
 ```
